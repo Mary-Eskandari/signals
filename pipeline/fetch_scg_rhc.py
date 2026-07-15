@@ -13,6 +13,7 @@ using the same fetch_record() call if more context is needed.
 """
 
 import argparse
+import json
 
 import numpy as np
 import requests
@@ -23,6 +24,7 @@ from pipeline.paths import SCG_RHC_RAW_DIR
 PN_DIR = "scg-rhc-wearable-database/1.0.0"
 SAMPLING_RATE_HZ = 500  # confirmed from record headers; consistent across the dataset
 DEFAULT_WINDOW_S = 120
+PA_WINDOW_MAX_S = 90  # cap fetch time; the true PA-placement segment can run several minutes
 
 META_FILES = (
     "meta_information/acronyms_RHC.csv",
@@ -58,15 +60,26 @@ def fetch_record_json(record_name: str, force: bool = False) -> None:
     _download(f"https://physionet.org/files/{PN_DIR}/{filename}", SCG_RHC_RAW_DIR / filename, force)
 
 
-def fetch_record(record_name: str, window_s: int = DEFAULT_WINDOW_S, force: bool = False):
-    dest = SCG_RHC_RAW_DIR / "processed_data" / f"{record_name}.npz"
+def get_chamber_events(record_name: str, force: bool = False) -> dict[str, float]:
+    """Catheter chamber-entry timestamps (seconds from procedure start): RA, RV, PA, PCW."""
+    fetch_record_json(record_name, force)
+    meta = json.loads((SCG_RHC_RAW_DIR / "processed_data" / f"{record_name}.json").read_text())
+    return meta["ChamEvents_in_s"]
+
+
+def fetch_window(record_name: str, start_s: float, duration_s: int, tag: str, force: bool = False):
+    # Cache key must encode the actual window bounds, not just a caller-chosen tag —
+    # otherwise a request for a shorter/different window silently returns a stale
+    # cached file from an earlier, differently-sized request under the same tag.
+    dest = SCG_RHC_RAW_DIR / "processed_data" / f"{record_name}__{tag}_{int(start_s)}_{int(duration_s)}.npz"
     if dest.exists() and not force:
         return dest
 
     record = wfdb.rdrecord(
         record_name,
         pn_dir=f"{PN_DIR}/processed_data",
-        sampto=window_s * SAMPLING_RATE_HZ,
+        sampfrom=int(start_s * SAMPLING_RATE_HZ),
+        sampto=int((start_s + duration_s) * SAMPLING_RATE_HZ),
     )
     dest.parent.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(
@@ -75,9 +88,30 @@ def fetch_record(record_name: str, window_s: int = DEFAULT_WINDOW_S, force: bool
         channel_names=np.array(record.sig_name),
         fs=record.fs,
         record_name=record_name,
+        start_s=start_s,
     )
+    return dest
+
+
+def fetch_record(record_name: str, window_s: int = DEFAULT_WINDOW_S, force: bool = False):
+    """Fetch the first `window_s` seconds of a record (tag='default')."""
+    dest = fetch_window(record_name, start_s=0, duration_s=window_s, tag="default", force=force)
     fetch_record_json(record_name, force)
     return dest
+
+
+def fetch_pa_window(record_name: str, duration_s: int = PA_WINDOW_MAX_S, pad_before_s: int = 5, force: bool = False):
+    """Fetch the segment where the catheter is actually in the pulmonary artery.
+
+    Uses each record's ChamEvents_in_s metadata (catheter chamber-entry timestamps)
+    rather than the start of the file, which is typically still in the right atrium.
+    Clipped to the PCW (wedge) timestamp if that arrives sooner than `duration_s`.
+    """
+    events = get_chamber_events(record_name, force)
+    start_s = max(0.0, events["PA"] - pad_before_s)
+    end_s = events.get("PCW", start_s + duration_s)
+    duration_s = max(10.0, min(duration_s, end_s - start_s))
+    return fetch_window(record_name, start_s, duration_s, tag="pa", force=force)
 
 
 def fetch_all(window_s: int = DEFAULT_WINDOW_S, force: bool = False) -> list[str]:
