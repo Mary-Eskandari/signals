@@ -68,12 +68,21 @@ def test_real_pa_window_extraction_is_physiologically_plausible():
     signal = data["signal"]
     channel_names = list(data["channel_names"])
     fs = float(data["fs"])
+    start_s = float(data["start_s"])
 
     ecg = signal[:, channel_names.index("ECG_lead_II")]
     r_peaks = detect_r_peaks(ecg, fs)
     hrv = compute_hrv(r_peaks, fs)
-    beats = extract_beats(signal, channel_names, fs, "TRM278-RHC1", "TRM278", r_peaks, scg_channel=SCG_CHANNEL)
+    beats = extract_beats(
+        signal, channel_names, fs, "TRM278-RHC1", "TRM278", r_peaks, scg_channel=SCG_CHANNEL, start_s=start_s
+    )
     summary = summarize_procedure(beats, hrv, "TRM278-RHC1", "TRM278")
+
+    # Regression check: onset_time_s must be absolute (matching the /waveform endpoint's
+    # time_s convention, which also adds start_s), not relative to the fetched array —
+    # a real bug where beat times defaulted to 0-based and never overlapped the actual
+    # waveform's absolute time range, silently breaking every frontend annotation.
+    assert all(start_s <= b.onset_time_s <= start_s + 90 for b in beats)
 
     # This dataset's implanted heart-rate range; this specific patient has a pacemaker (~60bpm).
     median_rr_ms = float(np.median([b.rr_interval_ms for b in beats]))

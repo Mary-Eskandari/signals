@@ -17,25 +17,28 @@ def list_records() -> list[dict]:
     return [{"record_id": r, "patient_id": r.split("-")[0]} for r in records]
 
 
-@router.get("/{record_id}/summary", response_model=ProcedureSummary)
-def get_record_summary(record_id: str, force: bool = False) -> ProcedureSummary:
+def ensure_record_processed(record_id: str, force: bool = False) -> ProcedureSummary:
+    """Idempotent process-on-demand, shared by /summary and /beats so neither depends
+    on request ordering — a client calling /beats before /summary must still work."""
     if not force:
         cached = store.read_procedure_summary(record_id)
         if cached is not None:
             return cached
-
     try:
         return process_record(record_id, force=force)
     except Exception as e:
         raise HTTPException(status_code=422, detail=f"could not process {record_id}: {e}") from e
 
 
+@router.get("/{record_id}/summary", response_model=ProcedureSummary)
+def get_record_summary(record_id: str, force: bool = False) -> ProcedureSummary:
+    return ensure_record_processed(record_id, force)
+
+
 @router.get("/{record_id}/beats", response_model=list[BeatFeatures])
 def get_record_beats(record_id: str) -> list[BeatFeatures]:
-    beats = store.read_beats(record_id)
-    if not beats:
-        raise HTTPException(status_code=404, detail=f"no beats found for {record_id}; call /summary first")
-    return beats
+    ensure_record_processed(record_id)
+    return store.read_beats(record_id)
 
 
 @router.get("/{record_id}/waveform")

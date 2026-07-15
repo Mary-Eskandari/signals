@@ -5,7 +5,8 @@ from pydantic import BaseModel
 
 from backend.app.config import ALLOWED_REPORT_MODELS, REPORT_MODEL
 from backend.app.llm_report import generate_report
-from pipeline import store
+from backend.app.routers.patients import ensure_patient_trend
+from backend.app.routers.records import ensure_record_processed
 from pipeline.schemas import ClinicalReport
 
 router = APIRouter(prefix="/reports", tags=["reports"])
@@ -27,15 +28,15 @@ def generate(req: GenerateReportRequest) -> ClinicalReport:
     if not req.record_id and not req.patient_id:
         raise HTTPException(status_code=422, detail="need at least one of record_id/patient_id")
 
-    procedure_summary = store.read_procedure_summary(req.record_id) if req.record_id else None
-    if req.record_id and procedure_summary is None:
-        raise HTTPException(status_code=404, detail=f"no processed summary for record {req.record_id}; call /records/{{id}}/summary first")
-
-    trend_summary = store.read_patient_trend_summary(req.patient_id) if req.patient_id else None
-    if req.patient_id and trend_summary is None:
-        raise HTTPException(status_code=404, detail=f"no trend summary for patient {req.patient_id}; call /patients/{{id}}/trend first")
+    procedure_summary = ensure_record_processed(req.record_id) if req.record_id else None
+    trend_summary = ensure_patient_trend(int(req.patient_id)) if req.patient_id else None
 
     try:
         return generate_report(procedure_summary=procedure_summary, trend_summary=trend_summary, model=req.model)
-    except RuntimeError as e:
-        raise HTTPException(status_code=503, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    except Exception as e:
+        # Never let a report-generation failure (LLM API error, schema drift the retry
+        # didn't resolve, etc.) escape as an unhandled 500 — that can arrive at the
+        # browser without CORS headers and surface as an opaque "Failed to fetch".
+        raise HTTPException(status_code=502, detail=f"report generation failed: {e}") from e

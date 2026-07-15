@@ -20,8 +20,9 @@ def list_patients() -> list[dict]:
     ]
 
 
-@router.get("/{patient_id}/trend", response_model=PatientTrendSummary)
-def get_patient_trend(patient_id: int, force: bool = False) -> PatientTrendSummary:
+def ensure_patient_trend(patient_id: int, force: bool = False) -> PatientTrendSummary:
+    """Idempotent process-on-demand — reused by /trend and /reports/generate so the
+    latter doesn't require the client to have called /trend first."""
     if not force:
         cached = store.read_patient_trend_summary(str(patient_id))
         if cached is not None:
@@ -32,6 +33,11 @@ def get_patient_trend(patient_id: int, force: bool = False) -> PatientTrendSumma
     if summary is None:
         raise HTTPException(status_code=422, detail=f"insufficient data for patient {patient_id}")
     return summary
+
+
+@router.get("/{patient_id}/trend", response_model=PatientTrendSummary)
+def get_patient_trend(patient_id: int, force: bool = False) -> PatientTrendSummary:
+    return ensure_patient_trend(patient_id, force)
 
 
 @router.get("/{patient_id}/daily", response_model=list[DailyTelemetry])

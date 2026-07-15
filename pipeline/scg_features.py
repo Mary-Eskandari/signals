@@ -45,11 +45,14 @@ def _largest_peak_in_window(beat_scg: np.ndarray, fs: float, window_s: tuple[flo
     return lo + idx, float(segment[idx])
 
 
-def extract_scg_beat_features(scg_signal: np.ndarray, fs: float, r_peaks: np.ndarray) -> list[dict]:
+def extract_scg_beat_features(
+    scg_signal: np.ndarray, fs: float, r_peaks: np.ndarray, start_s: float = 0.0
+) -> list[dict]:
     """One dict of scg_ao_time_s/scg_ao_amplitude/scg_ac_time_s/scg_ac_amplitude per beat.
 
     Values are None where no prominent deflection was found in the search window
     (e.g. a noisy beat) — callers should treat that as "unavailable", not zero.
+    `start_s`: absolute procedure-time offset of sample 0 — see extract_beats() docstring.
     """
     filtered = filter_scg(scg_signal, fs)
     results = []
@@ -60,9 +63,9 @@ def extract_scg_beat_features(scg_signal: np.ndarray, fs: float, r_peaks: np.nda
         ac = _largest_peak_in_window(beat, fs, AC_WINDOW_S)
         results.append(
             {
-                "scg_ao_time_s": (start + ao[0]) / fs if ao else None,
+                "scg_ao_time_s": start_s + (start + ao[0]) / fs if ao else None,
                 "scg_ao_amplitude": ao[1] if ao else None,
-                "scg_ac_time_s": (start + ac[0]) / fs if ac else None,
+                "scg_ac_time_s": start_s + (start + ac[0]) / fs if ac else None,
                 "scg_ac_amplitude": ac[1] if ac else None,
             }
         )

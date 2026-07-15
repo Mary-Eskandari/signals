@@ -4,6 +4,10 @@ static reference ranges (e.g. "normal PA systolic ~15-30 mmHg" is legitimate
 framing, not a hallucinated patient value). This is a smoke-test complement
 to manual review, not a replacement for it — text-based number extraction is
 inherently approximate (units, rounding, ranges).
+
+Known limitation: a simple arithmetic derivation from two grounded numbers
+(e.g. "5 excluded" from n_beats_total=90 minus n_beats_included=85) can still
+flag as ungrounded, since this only checks literal presence, not derivations.
 """
 
 import re
@@ -14,12 +18,17 @@ from pipeline.schemas import ClinicalReport
 _NUMBER_RE = re.compile(r"-?\d+\.\d+|-?\d+")
 _DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")  # ISO dates aren't "numeric claims" to ground
 _ID_RE = re.compile(r"\b[A-Za-z]+\d+[A-Za-z0-9-]*\b")  # record/beat IDs, e.g. TRM278-RHC1
+_YEAR_RANGE = (1900, 2100)  # prose dates ("June-November 2000") aren't ISO-formatted;
+# no clinical value in this app (PAP/HRV/weight/BP/SCG) plausibly reaches 4 digits.
 
 
 def _extract_numbers(text: str) -> set[float]:
     text = _DATE_RE.sub(" ", text)
     text = _ID_RE.sub(" ", text)
-    return {float(m) for m in _NUMBER_RE.findall(text)}
+    return {
+        float(m) for m in _NUMBER_RE.findall(text)
+        if not (_YEAR_RANGE[0] <= float(m) <= _YEAR_RANGE[1])
+    }
 
 
 def _payload_numbers(obj) -> set[float]:

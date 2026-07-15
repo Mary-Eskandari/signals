@@ -13,19 +13,22 @@ import hashlib
 import json
 
 from anthropic import Anthropic
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from backend.app.config import ALLOWED_REPORT_MODELS, ANTHROPIC_API_KEY, REPORT_MODEL
 from pipeline import store
 from pipeline.schemas import ClinicalReport, PatientTrendSummary, ProcedureSummary, ReportSection
 
 SYSTEM_PROMPT = """\
-You are drafting a structured, DEMONSTRATION-ONLY summary of hemodynamic \
-signal-processing output for a technical portfolio project. It is built \
-entirely from public, de-identified research data (PhysioNet SCG-RHC \
-catheterization procedures; Chiron CHF telemonitoring dataset). It is NOT a \
-real diagnosis, NOT a clinical tool, and NOT for use in any actual \
-patient-care decision.
+You are drafting a structured clinical-style summary of hemodynamic \
+signal-processing output (PhysioNet SCG-RHC catheterization data; Chiron CHF \
+telemonitoring data) for a technical portfolio project.
+
+The demonstration/not-a-real-diagnosis framing is shown to the reader \
+separately (a persistent banner and a fixed disclaimer field) — do NOT repeat \
+it, reference it, or hedge with it in the summary or flags. Write the summary \
+and flags as pure clinical-style findings only; assume the reader already \
+knows this is a demo.
 
 GROUNDING RULE (strict): only state numeric values that appear in the JSON \
 payload provided in the user message. If a metric is null, missing, or \
@@ -50,9 +53,10 @@ high values can indicate arrhythmia (e.g. atrial fibrillation) rather than \
 a heuristic, non-clinically-validated measurement in this project (no \
 established SCG feature-extraction library exists; detection was custom-built).
 
-Write in a clear, structured clinical-summary tone, but always keep in mind \
-— and make clear in the summary — that this is a demonstration/portfolio \
-artifact, not a real report.
+Write in a clear, structured clinical-summary tone. `flags` should be the \
+notable clinical-style callouts from THIS data (e.g. "PA pressure markedly \
+elevated", "HRV elevated, possible arrhythmia") — never the demo/disclaimer \
+notice itself.
 """
 
 
@@ -82,6 +86,20 @@ def payload_hash(payload: dict) -> str:
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()[:16]
 
 
+def _parse_draft(tool_input: dict) -> _ReportDraft:
+    """Some models occasionally wrap the payload under an extra key (e.g.
+    {"report": {...}}) despite the flat tool schema — observed in practice,
+    not hypothetical. Unwrap that shape defensively before giving up."""
+    try:
+        return _ReportDraft.model_validate(tool_input)
+    except ValidationError:
+        if len(tool_input) == 1:
+            (inner,) = tool_input.values()
+            if isinstance(inner, dict):
+                return _ReportDraft.model_validate(inner)
+        raise
+
+
 def generate_report(
     procedure_summary: ProcedureSummary | None = None,
     trend_summary: PatientTrendSummary | None = None,
@@ -96,34 +114,46 @@ def generate_report(
         raise RuntimeError("ANTHROPIC_API_KEY is not set (check .env)")
 
     payload = build_grounding_payload(procedure_summary, trend_summary)
-    cache_key = payload_hash(payload)
+    # Include the prompt in the cache key so editing SYSTEM_PROMPT auto-invalidates
+    # old cached reports instead of silently serving stale (e.g. pre-fix) output.
+    cache_key = payload_hash({"payload": payload, "system_prompt": SYSTEM_PROMPT})
     cached = store.read_cached_report(cache_key, model)
     if cached is not None:
         return cached
 
     client = Anthropic(api_key=ANTHROPIC_API_KEY)
+    tools = [
+        {
+            "name": "submit_clinical_report",
+            "description": "Submit the structured demonstration clinical report.",
+            "input_schema": _ReportDraft.model_json_schema(),
+        }
+    ]
+    tool_choice = {"type": "tool", "name": "submit_clinical_report"}
+    user_content = json.dumps(payload, indent=2)
 
-    response = client.messages.create(
-        model=model,
-        max_tokens=4000,
-        system=SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": json.dumps(payload, indent=2)}],
-        tools=[
-            {
-                "name": "submit_clinical_report",
-                "description": "Submit the structured demonstration clinical report.",
-                "input_schema": _ReportDraft.model_json_schema(),
-            }
-        ],
-        tool_choice={"type": "tool", "name": "submit_clinical_report"},
-    )
+    last_error: Exception | None = None
+    for attempt in range(2):  # one retry for occasional tool-schema drift, see _parse_draft
+        response = client.messages.create(
+            model=model,
+            max_tokens=4000,
+            system=SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": user_content}],
+            tools=tools,
+            tool_choice=tool_choice,
+        )
+        if response.stop_reason == "max_tokens":
+            raise RuntimeError("report generation was truncated (hit max_tokens) — retry or shorten the payload")
 
-    if response.stop_reason == "max_tokens":
-        raise RuntimeError("report generation was truncated (hit max_tokens) — retry or shorten the payload")
+        tool_use = next(block for block in response.content if block.type == "tool_use")
+        try:
+            draft = _parse_draft(tool_use.input)
+            break
+        except ValidationError as e:
+            last_error = e
+    else:
+        raise RuntimeError(f"model did not return a valid report after retry: {last_error}")
 
-    tool_use = next(block for block in response.content if block.type == "tool_use")
-    draft = _ReportDraft.model_validate(tool_use.input)
     report = ClinicalReport(**draft.model_dump())
-
     store.write_cached_report(cache_key, model, report)
     return report

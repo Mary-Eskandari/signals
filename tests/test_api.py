@@ -77,18 +77,24 @@ def test_reports_generate_requires_record_or_patient():
     assert response.status_code == 422
 
 
-def test_reports_generate_404s_on_unprocessed_record():
-    response = client.post("/reports/generate", json={"record_id": "TRM178-RHC1"})
-    assert response.status_code == 404
+def test_reports_generate_404s_on_unknown_record():
+    response = client.post("/reports/generate", json={"record_id": "NOT-A-REAL-RECORD"})
+    assert response.status_code == 422
 
 
 @pytest.mark.skipif(not ANTHROPIC_API_KEY, reason="requires ANTHROPIC_API_KEY for a live call")
-def test_reports_generate_end_to_end():
-    client.get("/records/TRM278-RHC1/summary")
-    client.get("/patients/9/trend")
-
+def test_reports_generate_auto_processes_without_prior_calls():
+    """/reports/generate must not depend on the client having called /summary or
+    /trend first — regression test for the race condition where the frontend's
+    waveform/beats panel could fetch beats before the summary panel had processed
+    the record, and reports could 404 if generated before /trend had ever run."""
     response = client.post("/reports/generate", json={"record_id": "TRM278-RHC1", "patient_id": "9"})
     assert response.status_code == 200
     report = response.json()
     assert report["disclaimer"]
     assert report["summary"]
+    # regression test: the model must not repeat the demo/disclaimer notice in the
+    # summary or flags — that's the header/footer's job, not the model's
+    assert "demonstration" not in report["summary"].lower()
+    assert "not a clinical tool" not in report["summary"].lower()
+    assert not any("demonstration" in f.lower() for f in report["flags"])

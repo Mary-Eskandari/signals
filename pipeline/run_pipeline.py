@@ -20,12 +20,15 @@ def process_record(record_name: str, duration_s: int = PA_WINDOW_MAX_S, force: b
     signal = data["signal"]
     channel_names = list(data["channel_names"])
     fs = float(data["fs"])
+    start_s = float(data["start_s"])
     patient_id = record_name.split("-")[0]
 
     ecg = signal[:, channel_names.index("ECG_lead_II")]
     r_peaks = detect_r_peaks(ecg, fs)
     hrv = compute_hrv(r_peaks, fs)
-    beats = extract_beats(signal, channel_names, fs, record_name, patient_id, r_peaks, scg_channel=SCG_CHANNEL)
+    beats = extract_beats(
+        signal, channel_names, fs, record_name, patient_id, r_peaks, scg_channel=SCG_CHANNEL, start_s=start_s
+    )
     summary = summarize_procedure(beats, hrv, record_name, patient_id)
 
     store.write_beats(beats)

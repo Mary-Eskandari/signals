@@ -72,13 +72,19 @@ def extract_beats(
     patient_id: str,
     r_peaks: np.ndarray,
     scg_channel: str | None = None,
+    start_s: float = 0.0,
 ) -> list[BeatFeatures]:
+    """`start_s`: absolute procedure-time offset of this signal array's sample 0 —
+    must match the /waveform endpoint's convention (fetch_window's start_s) so
+    beat-time fields (onset_time_s, scg_ao/ac_time_s) align with waveform.time_s
+    for frontend annotation. Without this, times default to array-relative (0-based),
+    which silently never overlaps a waveform window that doesn't start at t=0."""
     pap = signal[:, channel_names.index(PAP_CHANNEL)]
 
     scg_per_beat = None
     if scg_channel and scg_channel in channel_names:
         scg = signal[:, channel_names.index(scg_channel)]
-        scg_per_beat = extract_scg_beat_features(scg, fs, r_peaks)
+        scg_per_beat = extract_scg_beat_features(scg, fs, r_peaks, start_s=start_s)
 
     beats = []
     for i in range(len(r_peaks) - 1):
@@ -103,7 +109,7 @@ def extract_beats(
                 beat_id=f"{record_id}-beat{i:05d}",
                 record_id=record_id,
                 patient_id=patient_id,
-                onset_time_s=(start + onset_idx) / fs,
+                onset_time_s=start_s + (start + onset_idx) / fs,
                 pap_systolic_mmhg=systolic,
                 pap_diastolic_mmhg=diastolic,
                 pap_mean_mmhg=mean_pressure,
