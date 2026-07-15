@@ -20,3 +20,10 @@ def test_chiron_parses():
     assert df.shape[0] > 1000
     assert {"Patient_ID", "Day", "SystolicBP", "DiastolicBP", "Weight", "SpO2"}.issubset(df.columns)
     assert df["Patient_ID"].nunique() > 1
+
+    # every column should end up numeric: the raw CSV mixes '?'/'-?' NA markers with
+    # European-locale comma decimals ('16,438' = 16.438), which pandas doesn't handle
+    # via a single read_csv option here — verifies the explicit per-column coercion works.
+    import pandas.api.types as ptypes
+
+    assert all(ptypes.is_numeric_dtype(df[c]) for c in df.columns if c not in ("Patient_ID", "Day"))

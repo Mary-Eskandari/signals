@@ -28,9 +28,18 @@ def fetch(force: bool = False):
 
 
 def load(force: bool = False) -> pd.DataFrame:
-    """Parse the cached CSV. Semicolon-delimited with '?' as the missing-value marker."""
+    """Parse the cached CSV: semicolon-delimited, '?'/'-?' for missing, comma as decimal
+    separator (European-locale export — e.g. '16,438' means 16.438, not sixteen thousand).
+
+    pandas' `decimal=','` doesn't reliably kick in on this file (many numeric columns stay
+    object-dtype), so decimal commas are converted explicitly on every non-numeric column.
+    """
     path = fetch(force)
-    return pd.read_csv(path, sep=";", na_values=["?"])
+    df = pd.read_csv(path, sep=";", na_values=["?", "-?"])
+    for col in df.columns:
+        if df[col].dtype == object:
+            df[col] = pd.to_numeric(df[col].astype(str).str.replace(",", ".", regex=False), errors="coerce")
+    return df
 
 
 if __name__ == "__main__":
