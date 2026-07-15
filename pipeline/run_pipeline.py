@@ -11,6 +11,7 @@ from pipeline import store
 from pipeline.beat_features import compute_hrv, detect_r_peaks, extract_beats, summarize_procedure
 from pipeline.fetch_scg_rhc import PA_WINDOW_MAX_S, fetch_pa_window
 from pipeline.schemas import ProcedureSummary
+from pipeline.scg_features import SCG_CHANNEL
 
 
 def process_record(record_name: str, duration_s: int = PA_WINDOW_MAX_S, force: bool = False) -> ProcedureSummary:
@@ -24,7 +25,7 @@ def process_record(record_name: str, duration_s: int = PA_WINDOW_MAX_S, force: b
     ecg = signal[:, channel_names.index("ECG_lead_II")]
     r_peaks = detect_r_peaks(ecg, fs)
     hrv = compute_hrv(r_peaks, fs)
-    beats = extract_beats(signal, channel_names, fs, record_name, patient_id, r_peaks)
+    beats = extract_beats(signal, channel_names, fs, record_name, patient_id, r_peaks, scg_channel=SCG_CHANNEL)
     summary = summarize_procedure(beats, hrv, record_name, patient_id)
 
     store.write_beats(beats)
@@ -45,5 +46,6 @@ if __name__ == "__main__":
             f"diastolic={summary.pap_diastolic_median_mmhg:.1f} "
             f"mean={summary.pap_mean_median_mmhg:.1f} "
             f"sdnn={summary.hrv_sdnn_ms:.1f}ms "
-            f"beats={summary.n_beats_included}/{summary.n_beats_total}"
+            f"beats={summary.n_beats_included}/{summary.n_beats_total} "
+            f"scg_ao_ac_interval={summary.scg_ao_ac_interval_ms}"
         )

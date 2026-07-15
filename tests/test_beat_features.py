@@ -2,6 +2,7 @@ import numpy as np
 
 from pipeline.beat_features import compute_hrv, detect_r_peaks, extract_beats, summarize_procedure
 from pipeline.fetch_scg_rhc import fetch_pa_window
+from pipeline.scg_features import SCG_CHANNEL
 
 
 def _synthetic_signal(fs: int, n_beats: int, systolic: float, diastolic: float):
@@ -71,7 +72,7 @@ def test_real_pa_window_extraction_is_physiologically_plausible():
     ecg = signal[:, channel_names.index("ECG_lead_II")]
     r_peaks = detect_r_peaks(ecg, fs)
     hrv = compute_hrv(r_peaks, fs)
-    beats = extract_beats(signal, channel_names, fs, "TRM278-RHC1", "TRM278", r_peaks)
+    beats = extract_beats(signal, channel_names, fs, "TRM278-RHC1", "TRM278", r_peaks, scg_channel=SCG_CHANNEL)
     summary = summarize_procedure(beats, hrv, "TRM278-RHC1", "TRM278")
 
     # This dataset's implanted heart-rate range; this specific patient has a pacemaker (~60bpm).
@@ -84,3 +85,8 @@ def test_real_pa_window_extraction_is_physiologically_plausible():
     assert summary.pap_systolic_median_mmhg > summary.pap_diastolic_median_mmhg
     assert summary.n_beats_included > 0
     assert summary.hrv_sdnn_ms > 0
+
+    # AO/AC interval approximates left-ventricular ejection time; literature range roughly
+    # 150-450ms depending on HR. Heuristic detection, not clinically validated — wide bounds.
+    assert summary.scg_ao_ac_interval_ms is not None
+    assert 100 < summary.scg_ao_ac_interval_ms < 450

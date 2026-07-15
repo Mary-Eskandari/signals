@@ -12,6 +12,7 @@ import neurokit2 as nk
 import numpy as np
 
 from pipeline.schemas import BeatFeatures, ProcedureSummary
+from pipeline.scg_features import extract_scg_beat_features
 
 ECG_CHANNEL = "ECG_lead_II"
 PAP_CHANNEL = "RHC_pressure"
@@ -70,8 +71,14 @@ def extract_beats(
     record_id: str,
     patient_id: str,
     r_peaks: np.ndarray,
+    scg_channel: str | None = None,
 ) -> list[BeatFeatures]:
     pap = signal[:, channel_names.index(PAP_CHANNEL)]
+
+    scg_per_beat = None
+    if scg_channel and scg_channel in channel_names:
+        scg = signal[:, channel_names.index(scg_channel)]
+        scg_per_beat = extract_scg_beat_features(scg, fs, r_peaks)
 
     beats = []
     for i in range(len(r_peaks) - 1):
@@ -90,6 +97,7 @@ def extract_beats(
         rr_ms = (end - start) / fs * 1000
 
         score = _score_beat_quality(systolic, diastolic, rr_ms)
+        scg = scg_per_beat[i] if scg_per_beat else {}
         beats.append(
             BeatFeatures(
                 beat_id=f"{record_id}-beat{i:05d}",
@@ -103,6 +111,10 @@ def extract_beats(
                 rr_interval_ms=rr_ms,
                 sqi_score=score,
                 quality_flag=_quality_flag(score),
+                scg_ao_time_s=scg.get("scg_ao_time_s"),
+                scg_ao_amplitude=scg.get("scg_ao_amplitude"),
+                scg_ac_time_s=scg.get("scg_ac_time_s"),
+                scg_ac_amplitude=scg.get("scg_ac_amplitude"),
             )
         )
     return beats
@@ -123,6 +135,15 @@ def summarize_procedure(
     diastolic = np.array([b.pap_diastolic_mmhg for b in good])
     mean_p = np.array([b.pap_mean_mmhg for b in good])
 
+    # SCG quality is independent of PAP quality (different signal, different artifacts) —
+    # aggregate over all beats with a successful AO/AC detection, not just PAP-"good" ones.
+    scg_beats = [b for b in beats if b.scg_ao_amplitude is not None and b.scg_ac_amplitude is not None]
+    scg_ao_mean = float(np.mean([b.scg_ao_amplitude for b in scg_beats])) if scg_beats else None
+    scg_ac_mean = float(np.mean([b.scg_ac_amplitude for b in scg_beats])) if scg_beats else None
+    scg_interval_mean = (
+        float(np.mean([(b.scg_ac_time_s - b.scg_ao_time_s) * 1000 for b in scg_beats])) if scg_beats else None
+    )
+
     return ProcedureSummary(
         record_id=record_id,
         patient_id=patient_id,
@@ -134,4 +155,7 @@ def summarize_procedure(
         pap_mean_median_mmhg=float(np.median(mean_p)),
         hrv_sdnn_ms=hrv["sdnn_ms"],
         hrv_rmssd_ms=hrv["rmssd_ms"],
+        scg_ao_amplitude_mean=scg_ao_mean,
+        scg_ac_amplitude_mean=scg_ac_mean,
+        scg_ao_ac_interval_ms=scg_interval_mean,
     )

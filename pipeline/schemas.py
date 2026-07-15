@@ -18,6 +18,10 @@ class BeatFeatures(BaseModel):
     rr_interval_ms: float
     sqi_score: float
     quality_flag: Literal["good", "questionable", "excluded"]
+    scg_ao_time_s: float | None = None
+    scg_ao_amplitude: float | None = None
+    scg_ac_time_s: float | None = None
+    scg_ac_amplitude: float | None = None
 
 
 class ProcedureSummary(BaseModel):

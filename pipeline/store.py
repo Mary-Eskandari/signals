@@ -33,7 +33,8 @@ def write_procedure_summary(summary: ProcedureSummary) -> None:
     if SUMMARIES_PATH.exists():
         existing = pd.read_parquet(SUMMARIES_PATH)
         existing = existing[existing["record_id"] != summary.record_id]
-        new_row = pd.concat([existing, new_row], ignore_index=True)
+        if not existing.empty:
+            new_row = pd.concat([existing, new_row], ignore_index=True)
     new_row.to_parquet(SUMMARIES_PATH, index=False)
 
 
