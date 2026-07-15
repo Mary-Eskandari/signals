@@ -56,6 +56,44 @@ def write_patient_trend_summary(summary: PatientTrendSummary) -> None:
     _upsert(PATIENT_TREND_SUMMARIES_PATH, "patient_id", summary.patient_id, pd.DataFrame([summary.model_dump()]))
 
 
+def read_procedure_summary(record_id: str) -> ProcedureSummary | None:
+    if not PROCEDURE_SUMMARIES_PATH.exists():
+        return None
+    df = pd.read_parquet(PROCEDURE_SUMMARIES_PATH)
+    match = df[df["record_id"] == record_id]
+    if match.empty:
+        return None
+    row = match.iloc[0].to_dict()
+    row["pap_systolic_iqr"] = (row.pop("pap_systolic_iqr_low"), row.pop("pap_systolic_iqr_high"))
+    return ProcedureSummary(**row)
+
+
+def read_beats(record_id: str) -> list[BeatFeatures]:
+    path = BEATS_DIR / f"{record_id}.parquet"
+    if not path.exists():
+        return []
+    df = pd.read_parquet(path).sort_values("beat_id")
+    return [BeatFeatures(**row) for row in df.to_dict(orient="records")]
+
+
+def read_patient_trend_summary(patient_id: str) -> PatientTrendSummary | None:
+    if not PATIENT_TREND_SUMMARIES_PATH.exists():
+        return None
+    df = pd.read_parquet(PATIENT_TREND_SUMMARIES_PATH)
+    match = df[df["patient_id"] == patient_id]
+    if match.empty:
+        return None
+    return PatientTrendSummary(**match.iloc[0].to_dict())
+
+
+def read_daily_telemetry(patient_id: str) -> list[DailyTelemetry]:
+    path = DAILY_TELEMETRY_DIR / f"{patient_id}.parquet"
+    if not path.exists():
+        return []
+    df = pd.read_parquet(path).sort_values("date")
+    return [DailyTelemetry(**row) for row in df.to_dict(orient="records")]
+
+
 def write_cached_report(payload_hash: str, model: str, report: ClinicalReport) -> None:
     cache_key = f"{payload_hash}:{model}"
     row = {"cache_key": cache_key, "payload_hash": payload_hash, "model": model, "report_json": report.model_dump_json()}

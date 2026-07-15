@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from backend.app.routers import patients, records, reports
+
 app = FastAPI(
     title="Cordella HF Signals API",
     description="Signal processing + LLM clinical reporting demo. Not a clinical tool.",
@@ -14,13 +16,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(records.router)
+app.include_router(patients.router)
+app.include_router(reports.router)
+
 
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
-
-
-# Core flow (implemented in later phases):
-#   POST /signals/upload   -> accept a raw signal file, run it through pipeline/, return a record_id
-#   GET  /signals/{id}/features -> ProcedureSummary / DailyTelemetry features for the uploaded signal
-#   POST /signals/{id}/report   -> generate a ClinicalReport via the Claude API from extracted features
