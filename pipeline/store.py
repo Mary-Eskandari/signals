@@ -9,12 +9,13 @@ import duckdb
 import pandas as pd
 
 from pipeline.paths import DATA_PROCESSED
-from pipeline.schemas import BeatFeatures, DailyTelemetry, PatientTrendSummary, ProcedureSummary
+from pipeline.schemas import BeatFeatures, ClinicalReport, DailyTelemetry, PatientTrendSummary, ProcedureSummary
 
 BEATS_DIR = DATA_PROCESSED / "beats"
 DAILY_TELEMETRY_DIR = DATA_PROCESSED / "daily_telemetry"
 PROCEDURE_SUMMARIES_PATH = DATA_PROCESSED / "procedure_summaries.parquet"
 PATIENT_TREND_SUMMARIES_PATH = DATA_PROCESSED / "patient_trend_summaries.parquet"
+LLM_REPORTS_PATH = DATA_PROCESSED / "llm_reports.parquet"
 
 
 def _upsert(path, key_col: str, key_value, new_row: pd.DataFrame) -> None:
@@ -53,6 +54,22 @@ def write_daily_telemetry(records: list[DailyTelemetry]) -> None:
 
 def write_patient_trend_summary(summary: PatientTrendSummary) -> None:
     _upsert(PATIENT_TREND_SUMMARIES_PATH, "patient_id", summary.patient_id, pd.DataFrame([summary.model_dump()]))
+
+
+def write_cached_report(payload_hash: str, model: str, report: ClinicalReport) -> None:
+    cache_key = f"{payload_hash}:{model}"
+    row = {"cache_key": cache_key, "payload_hash": payload_hash, "model": model, "report_json": report.model_dump_json()}
+    _upsert(LLM_REPORTS_PATH, "cache_key", cache_key, pd.DataFrame([row]))
+
+
+def read_cached_report(payload_hash: str, model: str) -> ClinicalReport | None:
+    if not LLM_REPORTS_PATH.exists():
+        return None
+    df = pd.read_parquet(LLM_REPORTS_PATH)
+    match = df[(df["payload_hash"] == payload_hash) & (df["model"] == model)]
+    if match.empty:
+        return None
+    return ClinicalReport.model_validate_json(match.iloc[0]["report_json"])
 
 
 def _has_files(directory) -> bool:

@@ -17,6 +17,7 @@ dependencies = [
     "scipy>=1.14",
     "anthropic>=0.40",
     "requests>=2.32",
+    "python-dotenv>=1.0",
 ]
 
 [project.optional-dependencies]
