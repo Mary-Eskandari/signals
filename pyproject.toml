@@ -17,6 +17,7 @@ dependencies = [
     "pyarrow>=17.0",
     "scipy>=1.14",
     "anthropic>=0.40",
+    "requests>=2.32",
 ]
 
 [project.optional-dependencies]
