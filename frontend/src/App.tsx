@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import './App.css'
+import { BeatFeaturesTable } from './components/BeatFeaturesTable'
+import { DailyTelemetryTable } from './components/DailyTelemetryTable'
 import { ProcedureSummaryPanel } from './components/ProcedureSummaryPanel'
 import { ReportPanel } from './components/ReportPanel'
 import { SelectorBar } from './components/SelectorBar'
@@ -36,11 +38,19 @@ function App() {
       <section className="panel">
         <h2>Waveform — PA Pressure / ECG / SCG</h2>
         <WaveformViewer recordId={recordId} />
+        <details className="feature-details">
+          <summary>Per-beat extracted features ({recordId})</summary>
+          <BeatFeaturesTable recordId={recordId} />
+        </details>
       </section>
 
       <section className="panel">
         <h2>Telemonitoring Trend — Patient {patientId}</h2>
         <TrendChart patientId={patientId} />
+        <details className="feature-details">
+          <summary>Daily telemetry features (Patient {patientId})</summary>
+          <DailyTelemetryTable patientId={patientId} />
+        </details>
       </section>
 
       <section className="panel">
