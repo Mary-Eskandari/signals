@@ -15,7 +15,10 @@ import re
 from backend.app.llm_report import SYSTEM_PROMPT
 from pipeline.schemas import ClinicalReport
 
-_NUMBER_RE = re.compile(r"-?\d+\.\d+|-?\d+")
+# (?<!\d) blocks treating a hyphen as a minus sign when it's actually a range separator
+# glued to the preceding number (e.g. "64.20-68.56 mmHg" is a range, not 64.20 and -68.56)
+# — a real negative reading is preceded by whitespace/start-of-string, not a digit.
+_NUMBER_RE = re.compile(r"(?<!\d)-?\d+\.\d+|(?<!\d)-?\d+")
 _DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")  # ISO dates aren't "numeric claims" to ground
 _ID_RE = re.compile(r"\b[A-Za-z]+\d+[A-Za-z0-9-]*\b")  # record/beat IDs, e.g. TRM278-RHC1
 _YEAR_RANGE = (1900, 2100)  # prose dates ("June-November 2000") aren't ISO-formatted;

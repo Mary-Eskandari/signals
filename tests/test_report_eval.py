@@ -8,6 +8,15 @@ def test_dates_and_record_ids_are_not_treated_as_numbers():
     assert numbers == {66.6}
 
 
+def test_range_notation_is_not_misparsed_as_a_negative_number():
+    """Regression test: 'IQR 64.20-68.56 mmHg' is a range (two positive endpoints), not
+    64.20 and -68.56 — the hyphen here is a separator glued to the preceding number, not
+    a minus sign. A real negative reading (e.g. '-45.0 mmHg' preceded by whitespace)
+    must still parse as negative."""
+    numbers = _extract_numbers("IQR 64.20-68.56 mmHg, flush artifact -45.0 mmHg")
+    assert numbers == {64.20, 68.56, -45.0}
+
+
 def test_check_grounding_flags_a_fabricated_value():
     report = ClinicalReport(
         summary="Systolic pressure was 999.9 mmHg.",
