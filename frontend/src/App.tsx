@@ -1,62 +1,34 @@
 import { useState } from 'react'
 import './App.css'
-import { BeatFeaturesTable } from './components/BeatFeaturesTable'
-import { DailyTelemetryTable } from './components/DailyTelemetryTable'
-import { ProcedureSummaryPanel } from './components/ProcedureSummaryPanel'
-import { ReportPanel } from './components/ReportPanel'
-import { SelectorBar } from './components/SelectorBar'
-import { TrendChart } from './components/TrendChart'
-import { WaveformViewer } from './components/WaveformViewer'
+import { ClassificationView } from './components/ClassificationView'
+import { DashboardView } from './components/DashboardView'
+
+type Tab = 'dashboard' | 'classification'
 
 function App() {
-  const [recordId, setRecordId] = useState('TRM278-RHC1')
-  const [patientId, setPatientId] = useState('9')
+  const [tab, setTab] = useState<Tab>('dashboard')
 
   return (
     <div className="app">
       <header className="app-header">
         <h1>Cordella-Adjacent HF Signal Insights</h1>
         <p className="tagline">
-          Pulmonary artery pressure, ECG, and seismocardiogram signal processing + LLM clinical reporting —
-          a technical exploration of the problem space behind implantable PA pressure sensor systems
-          (e.g. Cordella, CardioMEMS) used in heart failure management.
+          Pulmonary artery pressure, ECG, and seismocardiogram signal processing + LLM clinical reporting + chamber-
+          position classification — a technical exploration of the problem space behind implantable PA pressure
+          sensor systems (e.g. Cordella, CardioMEMS) used in heart failure management.
         </p>
       </header>
 
-      <SelectorBar
-        recordId={recordId}
-        patientId={patientId}
-        onRecordChange={setRecordId}
-        onPatientChange={setPatientId}
-      />
+      <nav className="tab-bar">
+        <button className={tab === 'dashboard' ? 'tab-active' : ''} onClick={() => setTab('dashboard')}>
+          Dashboard
+        </button>
+        <button className={tab === 'classification' ? 'tab-active' : ''} onClick={() => setTab('classification')}>
+          Classification
+        </button>
+      </nav>
 
-      <section className="panel">
-        <h2>Procedure Summary — {recordId}</h2>
-        <ProcedureSummaryPanel recordId={recordId} />
-      </section>
-
-      <section className="panel">
-        <h2>Waveform — PA Pressure / ECG / SCG</h2>
-        <WaveformViewer recordId={recordId} />
-        <details className="feature-details">
-          <summary>Per-beat extracted features ({recordId})</summary>
-          <BeatFeaturesTable recordId={recordId} />
-        </details>
-      </section>
-
-      <section className="panel">
-        <h2>Telemonitoring Trend — Patient {patientId}</h2>
-        <TrendChart patientId={patientId} />
-        <details className="feature-details">
-          <summary>Daily telemetry features (Patient {patientId})</summary>
-          <DailyTelemetryTable patientId={patientId} />
-        </details>
-      </section>
-
-      <section className="panel">
-        <h2>LLM Clinical Summary</h2>
-        <ReportPanel recordId={recordId} patientId={patientId} />
-      </section>
+      {tab === 'dashboard' ? <DashboardView /> : <ClassificationView />}
 
       <footer className="app-footer">
         <p>

@@ -1,6 +1,8 @@
 import type {
   BeatFeatures,
   ChamberEvents,
+  ClassificationModelsResponse,
+  ClassificationStatus,
   ClinicalReport,
   DailyTelemetry,
   ModelsResponse,
@@ -8,6 +10,8 @@ import type {
   PatientTrendSummary,
   ProcedureSummary,
   RecordListItem,
+  TrainProgressEvent,
+  TrainRequest,
   WaveformResponse,
 } from './types'
 
@@ -50,4 +54,40 @@ export const api = {
   listReportModels: () => get<ModelsResponse>('/reports/models'),
   generateReport: (recordId: string | null, patientId: string | null, model?: string) =>
     post<ClinicalReport>('/reports/generate', { record_id: recordId, patient_id: patientId, model }),
+
+  classificationStatus: () => get<ClassificationStatus>('/classification/status'),
+  classificationModels: () => get<ClassificationModelsResponse>('/classification/models'),
+  classificationLabels: () => get<string[]>('/classification/labels'),
+  classificationRecords: () => get<string[]>('/classification/records'),
+
+  /** Consumes the newline-delimited-JSON training stream, calling onEvent for each
+   * progress line (epoch/fold/fitting) and the final result line. */
+  trainStream: async (req: TrainRequest, onEvent: (e: TrainProgressEvent) => void): Promise<void> => {
+    const response = await fetch(`${API_BASE}/classification/train/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req),
+    })
+    if (!response.ok) {
+      const text = await response.text()
+      throw new Error(`train/stream failed (${response.status}): ${text}`)
+    }
+    if (!response.body) {
+      throw new Error('train/stream failed: response had no body')
+    }
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() ?? ''
+      for (const line of lines) {
+        if (line.trim()) onEvent(JSON.parse(line) as TrainProgressEvent)
+      }
+    }
+    if (buffer.trim()) onEvent(JSON.parse(buffer) as TrainProgressEvent)
+  },
 }

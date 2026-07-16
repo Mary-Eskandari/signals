@@ -100,3 +100,93 @@ export interface ModelsResponse {
   allowed_models: string[]
   default: string
 }
+
+// --- Classification ---
+
+export type ModelTier = 'classic' | 'ensemble' | 'neural'
+export type FeatureSet = 'engineered' | 'raw'
+
+export interface ModelMeta {
+  tier: ModelTier
+  feature_set: FeatureSet
+  display_name: string
+}
+
+export interface HyperparamSpec {
+  name: string
+  type: 'int' | 'float'
+  default: number
+  min: number
+  max: number
+  description?: string
+}
+
+export interface ClassificationModelsResponse {
+  models: Record<string, ModelMeta>
+  hyperparameters: Record<string, HyperparamSpec[]>
+}
+
+export interface ClassificationStatus {
+  n_records_covered: number
+  total_records: number
+  n_beats: number
+  per_chamber: Record<string, number>
+}
+
+export interface PerClassMetric {
+  label: string
+  precision: number
+  recall: number
+  f1: number
+  support: number
+}
+
+export interface ClassificationResult {
+  model: string
+  feature_set: FeatureSet
+  hyperparameters: Record<string, number>
+  accuracy?: number
+  macro_f1?: number
+  weighted_f1?: number
+  confusion_matrix?: number[][]
+  labels?: string[]
+  per_class?: PerClassMetric[]
+  n_train_beats?: number
+  n_test_beats?: number
+  train_seconds: number
+  cv_folds?: number
+  cv_results?: ClassificationResult[]
+  mean_accuracy?: number
+  std_accuracy?: number
+  mean_macro_f1?: number
+  std_macro_f1?: number
+}
+
+export interface SplitConfig {
+  mode: 'auto' | 'manual'
+  test_size?: number
+  train_record_ids?: string[]
+  test_record_ids?: string[]
+}
+
+export interface TrainRequest {
+  model: string
+  split?: SplitConfig
+  cv_folds?: number | null
+  hyperparameters?: Record<string, number>
+}
+
+export interface TrainProgressEvent {
+  type: 'epoch' | 'fold' | 'fitting' | 'result' | 'error'
+  epoch?: number
+  total_epochs?: number
+  loss?: number
+  train_accuracy?: number
+  fold?: number
+  total_folds?: number
+  accuracy?: number
+  macro_f1?: number
+  model?: string
+  data?: ClassificationResult
+  message?: string
+}
