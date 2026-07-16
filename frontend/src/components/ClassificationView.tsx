@@ -219,9 +219,7 @@ export function ClassificationView() {
 
         {usesEngineeredFeatures ? (
           <>
-            <h4 style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.4, color: 'var(--text-muted)', marginTop: 16 }}>
-              Features
-            </h4>
+            <h4 className="section-label">Features</h4>
             <FeatureSelector allFeatures={allFeatures} selected={selectedFeatures} onChange={setSelectedFeatures} />
           </>
         ) : (
@@ -231,9 +229,7 @@ export function ClassificationView() {
           </div>
         )}
 
-        <h4 style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.4, color: 'var(--text-muted)', marginTop: 16 }}>
-          Hyperparameters
-        </h4>
+        <h4 className="section-label">Hyperparameters</h4>
         <HyperparameterControls
           specs={modelsData?.hyperparameters[selectedModel] ?? []}
           values={hyperparams}

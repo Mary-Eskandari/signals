@@ -76,7 +76,7 @@ export function ClassificationResults({ result }: Props) {
 
       {!isCV && result.confusion_matrix && result.labels && (
         <div style={{ marginTop: 20 }}>
-          <h4 style={{ fontSize: 13, marginBottom: 4 }}>Confusion Matrix</h4>
+          <h4 className="subsection-heading">Confusion Matrix</h4>
           <ConfusionMatrixChart matrix={result.confusion_matrix} labels={result.labels} />
         </div>
       )}
