@@ -1,13 +1,28 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
+import { DAILY_FIELDS, FLAG_EXPLANATIONS, FLAG_LABELS } from '../lib/glossary'
 import type { DailyTelemetry } from '../lib/types'
 
 interface Props {
   patientId: string
 }
 
+const COLUMNS: (keyof typeof DAILY_FIELDS)[] = [
+  'weight_kg',
+  'systolic_bp_mmhg',
+  'diastolic_bp_mmhg',
+  'spo2_pct',
+  'hr_bpm',
+  'activity_score',
+]
+
 function fmt(n: number | null | undefined, digits = 1): string {
   return n === null || n === undefined || Number.isNaN(n) ? '—' : n.toFixed(digits)
+}
+
+function Th({ field }: { field: string }) {
+  const meta = DAILY_FIELDS[field]
+  return <th title={meta.tooltip}>{meta.label}</th>
 }
 
 export function DailyTelemetryTable({ patientId }: Props) {
@@ -28,14 +43,11 @@ export function DailyTelemetryTable({ patientId }: Props) {
       <table className="feature-table">
         <thead>
           <tr>
-            <th>Date</th>
-            <th>Weight (kg)</th>
-            <th>Systolic BP</th>
-            <th>Diastolic BP</th>
-            <th>SpO2 (%)</th>
-            <th>HR (bpm)</th>
-            <th>Activity</th>
-            <th>Flags</th>
+            <th title="Calendar date of this reading (mapped from the dataset's study-relative day index).">Date</th>
+            {COLUMNS.map((c) => (
+              <Th key={c} field={c} />
+            ))}
+            <Th field="flags" />
           </tr>
         </thead>
         <tbody>
@@ -50,8 +62,8 @@ export function DailyTelemetryTable({ patientId }: Props) {
               <td>{fmt(r.activity_score, 2)}</td>
               <td>
                 {r.flags.map((f) => (
-                  <span key={f} className="quality-pill quality-questionable">
-                    {f}
+                  <span key={f} className="quality-pill quality-questionable" title={FLAG_EXPLANATIONS[f] ?? f}>
+                    {FLAG_LABELS[f] ?? f}
                   </span>
                 ))}
               </td>

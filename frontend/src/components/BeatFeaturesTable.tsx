@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
+import { BEAT_FIELDS } from '../lib/glossary'
 import type { BeatFeatures } from '../lib/types'
 
 interface Props {
@@ -12,8 +13,28 @@ const QUALITY_CLASS: Record<string, string> = {
   excluded: 'quality-excluded',
 }
 
+const COLUMNS: (keyof typeof BEAT_FIELDS)[] = [
+  'onset_time_s',
+  'pap_systolic_mmhg',
+  'pap_diastolic_mmhg',
+  'pap_mean_mmhg',
+  'pulse_pressure_mmhg',
+  'rr_interval_ms',
+  'sqi_score',
+  'quality_flag',
+  'scg_ao_time_s',
+  'scg_ao_amplitude',
+  'scg_ac_time_s',
+  'scg_ac_amplitude',
+]
+
 function fmt(n: number | null, digits = 1): string {
   return n === null || n === undefined ? '—' : n.toFixed(digits)
+}
+
+function Th({ field }: { field: string }) {
+  const meta = BEAT_FIELDS[field]
+  return <th title={meta.tooltip}>{meta.label}</th>
 }
 
 export function BeatFeaturesTable({ recordId }: Props) {
@@ -34,19 +55,10 @@ export function BeatFeaturesTable({ recordId }: Props) {
       <table className="feature-table">
         <thead>
           <tr>
-            <th>Beat</th>
-            <th>Onset (s)</th>
-            <th>Systolic</th>
-            <th>Diastolic</th>
-            <th>Mean</th>
-            <th>Pulse P.</th>
-            <th>RR (ms)</th>
-            <th>SQI</th>
-            <th>Quality</th>
-            <th>AO time (s)</th>
-            <th>AO amp</th>
-            <th>AC time (s)</th>
-            <th>AC amp</th>
+            <th title="Sequential beat index within this recording window.">Beat</th>
+            {COLUMNS.map((c) => (
+              <Th key={c} field={c} />
+            ))}
           </tr>
         </thead>
         <tbody>
@@ -60,7 +72,7 @@ export function BeatFeaturesTable({ recordId }: Props) {
               <td>{fmt(b.pulse_pressure_mmhg)}</td>
               <td>{fmt(b.rr_interval_ms, 0)}</td>
               <td>{fmt(b.sqi_score, 2)}</td>
-              <td>
+              <td title={BEAT_FIELDS.quality_flag.tooltip}>
                 <span className={`quality-pill ${QUALITY_CLASS[b.quality_flag]}`}>{b.quality_flag}</span>
               </td>
               <td>{fmt(b.scg_ao_time_s, 2)}</td>

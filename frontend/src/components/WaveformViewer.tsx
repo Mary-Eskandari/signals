@@ -146,8 +146,18 @@ export function WaveformViewer({ recordId }: Props) {
     <div>
       <ReactECharts option={option} style={{ height: 480, width: '100%' }} notMerge />
       <div className="legend-note">
-        <span className="dot" style={{ background: annotationColor }} /> ● PAP pulse onset
-        <span className="dot" style={{ background: annotationColor, marginLeft: 16 }} /> ◆ SCG AO (circle) / AC (diamond)
+        <span
+          className="dot"
+          style={{ background: annotationColor }}
+          title="Time when PA pressure begins its systolic upstroke — the start of each heartbeat."
+        />{' '}
+        ● Pulse onset
+        <span
+          className="dot"
+          style={{ background: annotationColor, marginLeft: 16 }}
+          title="Aortic valve opening (circle) and closure (diamond), detected from the seismocardiogram — mark the start and end of systolic ejection."
+        />{' '}
+        ◆ Aortic opening (○) / closure (◆)
       </div>
     </div>
   )
