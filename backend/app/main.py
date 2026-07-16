@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.app.routers import patients, records, reports
+from backend.app.routers import classification, patients, records, reports
 
 app = FastAPI(
     title="Cordella HF Signals API",
@@ -19,6 +19,7 @@ app.add_middleware(
 app.include_router(records.router)
 app.include_router(patients.router)
 app.include_router(reports.router)
+app.include_router(classification.router)
 
 
 @app.get("/health")
