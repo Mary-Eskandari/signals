@@ -27,3 +27,6 @@ frontend/.vite/
 .DS_Store
 .vscode/
 .idea/
+
+# Claude Code session state
+.claude/

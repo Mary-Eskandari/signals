@@ -100,12 +100,44 @@ def fetch_record(record_name: str, window_s: int = DEFAULT_WINDOW_S, force: bool
     return dest
 
 
+CHAMBER_ORDER = ["RA", "RV", "PA", "PCW"]
+
+
+def fetch_chamber_window(
+    record_name: str,
+    chamber: str,
+    duration_s: float = 20.0,
+    pad_before_s: float = 2.0,
+    force: bool = False,
+):
+    """Fetch the segment where the catheter is in the given chamber (RA/RV/PA/PCW).
+
+    Uses each record's ChamEvents_in_s metadata (catheter chamber-entry timestamps)
+    rather than the start of the file. Bounded chambers (RA/RV/PA) are clipped to
+    the next chamber's timestamp if that arrives sooner than `duration_s`; PCW has
+    no next event so it keeps the requested fixed duration — callers should retry
+    with a shorter duration if wfdb errors reading past the record's actual end.
+    """
+    events = get_chamber_events(record_name, force)
+    if chamber not in events:
+        raise ValueError(f"{record_name} has no {chamber!r} timestamp in ChamEvents_in_s: {events}")
+    start_s = max(0.0, events[chamber] - pad_before_s)
+
+    idx = CHAMBER_ORDER.index(chamber)
+    if idx + 1 < len(CHAMBER_ORDER):
+        next_chamber = CHAMBER_ORDER[idx + 1]
+        if next_chamber in events:
+            duration_s = max(5.0, min(duration_s, events[next_chamber] - start_s))
+
+    return fetch_window(record_name, start_s, duration_s, tag=f"chamber_{chamber}", force=force)
+
+
 def fetch_pa_window(record_name: str, duration_s: int = PA_WINDOW_MAX_S, pad_before_s: int = 5, force: bool = False):
     """Fetch the segment where the catheter is actually in the pulmonary artery.
 
-    Uses each record's ChamEvents_in_s metadata (catheter chamber-entry timestamps)
-    rather than the start of the file, which is typically still in the right atrium.
-    Clipped to the PCW (wedge) timestamp if that arrives sooner than `duration_s`.
+    Thin wrapper over fetch_chamber_window with the historical "pa" cache tag and
+    defaults, kept separate since the rest of the pipeline (run_pipeline.py etc.)
+    depends on this exact tag/signature.
     """
     events = get_chamber_events(record_name, force)
     start_s = max(0.0, events["PA"] - pad_before_s)
