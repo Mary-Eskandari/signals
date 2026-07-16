@@ -82,6 +82,19 @@ export const BEAT_FIELDS: Record<string, FieldMeta> = {
   },
 }
 
+// Pulse-wave-analysis + SCG-ensemble features (dicrotic notch, upstroke slope, beat
+// shape stats, SCG cross-check confidence) — added on top of the original catheter/
+// SCG landmark features to give the classifier richer per-beat morphology.
+export const SOTA_BEAT_FIELDS = new Set([
+  'scg_detection_confidence',
+  'dicrotic_notch_time_s',
+  'dicrotic_notch_pressure_mmhg',
+  'upstroke_slope_mmhg_s',
+  'beat_auc_mmhg_s',
+  'beat_skewness',
+  'beat_kurtosis',
+])
+
 export const DAILY_FIELDS: Record<string, FieldMeta> = {
   weight_kg: { label: 'Weight (kg)', tooltip: 'Daily home scale reading.' },
   systolic_bp_mmhg: { label: 'Systolic BP (mmHg)', tooltip: 'Systolic (peak) blood pressure from a home cuff reading.' },
