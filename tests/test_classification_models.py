@@ -42,6 +42,12 @@ def _synthetic_engineered_df(n_per_record=20, n_records_per_chamber=3):
                         "sqi_score": 1.0,
                         "scg_ao_amplitude": rng.normal(0, 1),
                         "scg_ac_amplitude": rng.normal(0, 1),
+                        "scg_detection_confidence": rng.uniform(0.5, 1.0),
+                        "dicrotic_notch_pressure_mmhg": base / 3 + rng.normal(0, 1),
+                        "upstroke_slope_mmhg_s": rng.normal(400, 50),
+                        "beat_auc_mmhg_s": base / 4 + rng.normal(0, 1),
+                        "beat_skewness": rng.normal(0, 0.5),
+                        "beat_kurtosis": rng.normal(0, 0.5),
                     }
                 )
     df = pd.DataFrame(rows)
@@ -98,6 +104,20 @@ def test_cnn_runs_on_synthetic_raw_snippets():
     y_test, y_pred = _fit_predict("cnn", df, snippets, train_idx, test_idx)
     assert y_pred.shape == y_test.shape
     assert set(y_pred.tolist()).issubset(set(range(4)))
+
+
+def test_xgboost_does_not_crash_with_torch_imported():
+    """Regression test: PyTorch and XGBoost each bundle their own OpenMP runtime —
+    loading both in one process reliably segfaulted XGBoost's .fit() on macOS until
+    KMP_DUPLICATE_LIB_OK+OMP_NUM_THREADS were set before either import (see the
+    top of classification_models.py). This test only proves anything because this
+    file already imports classification_models, which imports torch, before this
+    test calls into XGBoost — that ordering is exactly what used to crash."""
+    df = _synthetic_engineered_df()
+    dummy_snippets = np.zeros((len(df), 3, 10), dtype=np.float32)
+    train_idx, test_idx = group_train_test_split(df, test_size=0.3)
+    y_test, y_pred = _fit_predict("xgboost", df, dummy_snippets, train_idx, test_idx)
+    assert y_pred.shape == y_test.shape
 
 
 def test_model_registry_covers_all_tiers():

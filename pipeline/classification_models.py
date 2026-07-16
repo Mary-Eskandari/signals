@@ -8,7 +8,16 @@ be fast (seconds for classic models, well under a minute for the CNN on a handfu
 of epochs with a small dataset).
 """
 
+import os
 import time
+
+# PyTorch and XGBoost each bundle their own OpenMP runtime; loading both in the
+# same process reliably segfaults on macOS during XGBoost's .fit() (reproduced:
+# crash-free if either library is imported alone, or if only OMP_NUM_THREADS=1
+# without KMP_DUPLICATE_LIB_OK, or vice versa — needs both together). Must be set
+# before either library is imported, since OpenMP reads these at first load.
+os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+os.environ.setdefault("OMP_NUM_THREADS", "1")
 
 import numpy as np
 import pandas as pd
@@ -38,6 +47,16 @@ NUMERIC_FEATURE_COLUMNS = [
     "sqi_score",
     "scg_ao_amplitude",
     "scg_ac_amplitude",
+    # richer PWA/SCG features (see pipeline/beat_features.py, scg_features.py citations) —
+    # absolute-time fields (dicrotic_notch_time_s) intentionally excluded, same as
+    # onset_time_s/scg_ao_time_s/scg_ac_time_s above, since raw timestamps aren't
+    # meaningfully comparable across beats without normalization.
+    "scg_detection_confidence",
+    "dicrotic_notch_pressure_mmhg",
+    "upstroke_slope_mmhg_s",
+    "beat_auc_mmhg_s",
+    "beat_skewness",
+    "beat_kurtosis",
 ]
 
 MODEL_REGISTRY = {

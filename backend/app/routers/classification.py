@@ -22,6 +22,15 @@ from pipeline.fetch_scg_rhc import CHAMBER_ORDER, fetch_records_list
 
 router = APIRouter(prefix="/classification", tags=["classification"])
 
+# PyTorch's MPS (Apple GPU) backend doesn't handle concurrent training loops from
+# multiple threads well — reproduced: overlapping CNN/LSTM training requests (e.g.
+# a client that disconnects mid-stream, leaving the server-side thread running,
+# followed by a new request) caused severe contention that looked like a hang
+# (29 accumulated threads, backend stuck in uninterruptible sleep). A single global
+# lock is the right fix for a single-user demo app: only one training job runs at
+# a time; anything else gets a clear 409 instead of silently degrading.
+_TRAINING_LOCK = threading.Lock()
+
 
 @router.get("/models")
 def list_models() -> dict:
@@ -100,6 +109,8 @@ def _run(req: TrainRequest, on_progress=None) -> dict:
 @router.post("/train")
 def train(req: TrainRequest) -> dict:
     _validate_train_request(req)
+    if not _TRAINING_LOCK.acquire(blocking=False):
+        raise HTTPException(status_code=409, detail="a training job is already in progress — wait for it to finish")
     try:
         load_dataset()  # raises FileNotFoundError with a clear message if not built yet
         return _run(req)
@@ -107,6 +118,8 @@ def train(req: TrainRequest) -> dict:
         raise HTTPException(status_code=503, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"training failed: {e}") from e
+    finally:
+        _TRAINING_LOCK.release()
 
 
 def _stream_events(req: TrainRequest):
@@ -120,6 +133,7 @@ def _stream_events(req: TrainRequest):
             progress_q.put({"type": "error", "message": str(e)})
         finally:
             progress_q.put(None)
+            _TRAINING_LOCK.release()
 
     threading.Thread(target=worker, daemon=True).start()
 
@@ -133,8 +147,14 @@ def _stream_events(req: TrainRequest):
 @router.post("/train/stream")
 def train_stream(req: TrainRequest) -> StreamingResponse:
     _validate_train_request(req)
+    if not _TRAINING_LOCK.acquire(blocking=False):
+        raise HTTPException(status_code=409, detail="a training job is already in progress — wait for it to finish")
     try:
         load_dataset()
     except FileNotFoundError as e:
+        _TRAINING_LOCK.release()
         raise HTTPException(status_code=503, detail=str(e)) from e
+    except Exception:
+        _TRAINING_LOCK.release()
+        raise
     return StreamingResponse(_stream_events(req), media_type="application/x-ndjson")

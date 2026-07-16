@@ -39,6 +39,13 @@ ENGINEERED_COLUMNS = [
     "quality_flag",
     "scg_ao_amplitude",
     "scg_ac_amplitude",
+    "scg_detection_confidence",
+    "dicrotic_notch_time_s",
+    "dicrotic_notch_pressure_mmhg",
+    "upstroke_slope_mmhg_s",
+    "beat_auc_mmhg_s",
+    "beat_skewness",
+    "beat_kurtosis",
 ]
 
 

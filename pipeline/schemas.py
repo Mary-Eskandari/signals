@@ -22,6 +22,21 @@ class BeatFeatures(BaseModel):
     scg_ao_amplitude: float | None = None
     scg_ac_time_s: float | None = None
     scg_ac_amplitude: float | None = None
+    # Agreement between this beat's AO/AC timing and the R-peak-aligned ensemble-average
+    # template (see scg_features.py's ensemble-averaging cross-check) — 1.0 = tight
+    # agreement, 0.0 = no agreement, None = not computable. Independent of pap sqi_score.
+    scg_detection_confidence: float | None = None
+    # Dicrotic notch: second-derivative fiducial point on the diastolic runoff (see
+    # beat_features._dicrotic_notch_idx for citation). None when no sufficiently
+    # prominent notch was found (e.g. an overdamped catheter trace).
+    dicrotic_notch_time_s: float | None = None
+    dicrotic_notch_pressure_mmhg: float | None = None
+    # Pulse-wave-analysis morphological features (see beat_features._upstroke_slope /
+    # _beat_shape_stats for citations).
+    upstroke_slope_mmhg_s: float | None = None
+    beat_auc_mmhg_s: float | None = None
+    beat_skewness: float | None = None
+    beat_kurtosis: float | None = None
 
 
 class ProcedureSummary(BaseModel):
@@ -35,6 +50,13 @@ class ProcedureSummary(BaseModel):
     pap_mean_median_mmhg: float
     hrv_sdnn_ms: float
     hrv_rmssd_ms: float
+    # Frequency-domain and nonlinear HRV (nk.hrv_frequency / nk.hrv_nonlinear) need
+    # longer/steadier RR-interval series than SDNN/RMSSD to be numerically stable —
+    # None when the window was too short or NeuroKit2 returned a non-finite value.
+    hrv_lf_hf_ratio: float | None = None
+    hrv_sd1_ms: float | None = None
+    hrv_sd2_ms: float | None = None
+    hrv_sample_entropy: float | None = None
     scg_ao_amplitude_mean: float | None = None
     scg_ac_amplitude_mean: float | None = None
     scg_ao_ac_interval_ms: float | None = None
