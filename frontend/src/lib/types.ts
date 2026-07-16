@@ -26,6 +26,13 @@ export interface BeatFeatures {
   scg_ao_amplitude: number | null
   scg_ac_time_s: number | null
   scg_ac_amplitude: number | null
+  scg_detection_confidence: number | null
+  dicrotic_notch_time_s: number | null
+  dicrotic_notch_pressure_mmhg: number | null
+  upstroke_slope_mmhg_s: number | null
+  beat_auc_mmhg_s: number | null
+  beat_skewness: number | null
+  beat_kurtosis: number | null
 }
 
 export interface ProcedureSummary {
