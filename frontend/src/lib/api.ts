@@ -59,6 +59,7 @@ export const api = {
   classificationModels: () => get<ClassificationModelsResponse>('/classification/models'),
   classificationLabels: () => get<string[]>('/classification/labels'),
   classificationRecords: () => get<string[]>('/classification/records'),
+  classificationFeatures: () => get<string[]>('/classification/features'),
 
   /** Consumes the newline-delimited-JSON training stream, calling onEvent for each
    * progress line (epoch/fold/fitting) and the final result line. */

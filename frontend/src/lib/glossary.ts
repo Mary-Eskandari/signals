@@ -52,6 +52,34 @@ export const BEAT_FIELDS: Record<string, FieldMeta> = {
     label: 'Aortic Closure Amp.',
     tooltip: 'Seismocardiogram signal amplitude at the moment of aortic valve closure (arbitrary units).',
   },
+  scg_detection_confidence: {
+    label: 'SCG Detection Confidence',
+    tooltip: 'Cross-check score (0-1) from comparing this beat against an R-peak-aligned ensemble-average SCG template — low values flag a shaky AO/AC detection.',
+  },
+  dicrotic_notch_time_s: {
+    label: 'Dicrotic Notch Time (s)',
+    tooltip: 'Time of the dicrotic notch (the small pressure rebound from aortic valve closure) within the beat.',
+  },
+  dicrotic_notch_pressure_mmhg: {
+    label: 'Dicrotic Notch Pressure (mmHg)',
+    tooltip: 'Pulmonary artery pressure at the dicrotic notch — a pulse-wave-analysis landmark tied to valve closure.',
+  },
+  upstroke_slope_mmhg_s: {
+    label: 'Upstroke Slope (mmHg/s)',
+    tooltip: 'Maximum rate of pressure rise during systolic upstroke (max dP/dt) — reflects contractility.',
+  },
+  beat_auc_mmhg_s: {
+    label: 'Beat AUC (mmHg·s)',
+    tooltip: 'Area under the pressure curve for one beat — a summary of the whole pulse shape, not just its peak.',
+  },
+  beat_skewness: {
+    label: 'Beat Skewness',
+    tooltip: 'Asymmetry of the pressure waveform shape within a beat.',
+  },
+  beat_kurtosis: {
+    label: 'Beat Kurtosis',
+    tooltip: '"Peakedness" of the pressure waveform shape within a beat.',
+  },
 }
 
 export const DAILY_FIELDS: Record<string, FieldMeta> = {

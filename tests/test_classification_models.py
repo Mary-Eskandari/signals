@@ -9,6 +9,7 @@ from pipeline.classification_models import (
     _fit_predict,
     group_train_test_split,
     load_dataset,
+    resolve_feature_columns,
     train_and_evaluate,
 )
 from pipeline.fetch_scg_rhc import CHAMBER_ORDER
@@ -80,6 +81,29 @@ def test_classic_model_learns_trivially_separable_synthetic_data():
     y_test, y_pred = _fit_predict("random_forest", df, dummy_snippets, train_idx, test_idx)
     accuracy = (y_test == y_pred).mean()
     assert accuracy > 0.9, f"expected near-perfect accuracy on trivially separable data, got {accuracy}"
+
+
+def test_resolve_feature_columns_defaults_to_full_set():
+    assert resolve_feature_columns(None) == NUMERIC_FEATURE_COLUMNS
+    assert resolve_feature_columns([]) == NUMERIC_FEATURE_COLUMNS
+
+
+def test_resolve_feature_columns_rejects_unknown_name():
+    with pytest.raises(ValueError, match="unknown feature column"):
+        resolve_feature_columns(["pap_systolic_mmhg", "not_a_real_feature"])
+
+
+def test_fit_predict_respects_custom_feature_subset():
+    df = _synthetic_engineered_df()
+    train_idx, test_idx = group_train_test_split(df, test_size=0.3)
+    dummy_snippets = np.zeros((len(df), 3, 10), dtype=np.float32)
+    # only the two features that actually separate the synthetic classes
+    subset = ["pap_systolic_mmhg", "pap_diastolic_mmhg"]
+    y_test, y_pred = _fit_predict(
+        "random_forest", df, dummy_snippets, train_idx, test_idx, feature_columns=subset
+    )
+    accuracy = (y_test == y_pred).mean()
+    assert accuracy > 0.9, f"expected near-perfect accuracy using separable features, got {accuracy}"
 
 
 def test_cnn_runs_on_synthetic_raw_snippets():

@@ -42,6 +42,14 @@ def test_classification_records_nonempty():
     assert len(response.json()) > 0
 
 
+def test_classification_features_nonempty():
+    response = client.get("/classification/features")
+    assert response.status_code == 200
+    features = response.json()
+    assert len(features) > 0
+    assert "pap_systolic_mmhg" in features
+
+
 def test_train_classic_model_auto_split():
     response = client.post("/classification/train", json={"model": "random_forest", "split": {"test_size": 0.3}})
     assert response.status_code == 200
@@ -78,6 +86,32 @@ def test_train_manual_split_requires_both_lists():
 
 def test_train_rejects_unknown_model():
     response = client.post("/classification/train", json={"model": "not_a_real_model"})
+    assert response.status_code == 422
+
+
+def test_train_with_custom_feature_subset():
+    subset = ["pap_systolic_mmhg", "pap_diastolic_mmhg", "rr_interval_ms"]
+    response = client.post(
+        "/classification/train",
+        json={"model": "random_forest", "feature_columns": subset},
+    )
+    assert response.status_code == 200
+    assert response.json()["feature_columns"] == subset
+
+
+def test_train_rejects_unknown_feature_column():
+    response = client.post(
+        "/classification/train",
+        json={"model": "random_forest", "feature_columns": ["not_a_real_feature"]},
+    )
+    assert response.status_code == 422
+
+
+def test_train_rejects_empty_feature_list():
+    response = client.post(
+        "/classification/train",
+        json={"model": "random_forest", "feature_columns": []},
+    )
     assert response.status_code == 422
 
 

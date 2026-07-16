@@ -17,7 +17,13 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from pipeline.chamber_dataset import BEATS_PATH
-from pipeline.classification_models import HYPERPARAMETER_SCHEMAS, MODEL_REGISTRY, load_dataset, train_and_evaluate
+from pipeline.classification_models import (
+    HYPERPARAMETER_SCHEMAS,
+    MODEL_REGISTRY,
+    NUMERIC_FEATURE_COLUMNS,
+    load_dataset,
+    train_and_evaluate,
+)
 from pipeline.fetch_scg_rhc import CHAMBER_ORDER, fetch_records_list
 
 router = APIRouter(prefix="/classification", tags=["classification"])
@@ -65,6 +71,15 @@ def labels() -> list[str]:
     return CHAMBER_ORDER
 
 
+@router.get("/features")
+def features() -> list[str]:
+    """Engineered feature columns available for classic/ensemble/mlp models — a
+    user can train on any non-empty subset (via TrainRequest.feature_columns) to
+    see which features actually drive accuracy. Raw-waveform models (cnn/lstm)
+    ignore this; they always use the fixed raw signal channels."""
+    return NUMERIC_FEATURE_COLUMNS
+
+
 class SplitConfig(BaseModel):
     mode: Literal["auto", "manual"] = "auto"
     test_size: float = 0.3
@@ -77,6 +92,7 @@ class TrainRequest(BaseModel):
     split: SplitConfig = SplitConfig()
     cv_folds: int | None = None
     hyperparameters: dict | None = None
+    feature_columns: list[str] | None = None
 
 
 def _validate_train_request(req: TrainRequest) -> None:
@@ -86,12 +102,19 @@ def _validate_train_request(req: TrainRequest) -> None:
         raise HTTPException(status_code=422, detail="cv_folds must be between 2 and 10")
     if req.split.mode == "manual" and not (req.split.train_record_ids and req.split.test_record_ids):
         raise HTTPException(status_code=422, detail="manual split needs both train_record_ids and test_record_ids")
+    if req.feature_columns is not None:
+        unknown = set(req.feature_columns) - set(NUMERIC_FEATURE_COLUMNS)
+        if unknown:
+            raise HTTPException(status_code=422, detail=f"unknown feature column(s): {sorted(unknown)}")
+        if not req.feature_columns:
+            raise HTTPException(status_code=422, detail="feature_columns, if given, must be non-empty")
 
 
 def _run(req: TrainRequest, on_progress=None) -> dict:
     if req.cv_folds:
         return train_and_evaluate(
-            req.model, cv_folds=req.cv_folds, hyperparameters=req.hyperparameters, on_progress=on_progress
+            req.model, cv_folds=req.cv_folds, hyperparameters=req.hyperparameters, on_progress=on_progress,
+            feature_columns=req.feature_columns,
         )
     if req.split.mode == "manual":
         return train_and_evaluate(
@@ -100,9 +123,11 @@ def _run(req: TrainRequest, on_progress=None) -> dict:
             manual_test_ids=req.split.test_record_ids,
             hyperparameters=req.hyperparameters,
             on_progress=on_progress,
+            feature_columns=req.feature_columns,
         )
     return train_and_evaluate(
-        req.model, test_size=req.split.test_size, hyperparameters=req.hyperparameters, on_progress=on_progress
+        req.model, test_size=req.split.test_size, hyperparameters=req.hyperparameters, on_progress=on_progress,
+        feature_columns=req.feature_columns,
     )
 
 

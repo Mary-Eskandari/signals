@@ -144,6 +144,7 @@ export interface PerClassMetric {
 export interface ClassificationResult {
   model: string
   feature_set: FeatureSet
+  feature_columns?: string[]
   hyperparameters: Record<string, number>
   accuracy?: number
   macro_f1?: number
@@ -174,6 +175,7 @@ export interface TrainRequest {
   split?: SplitConfig
   cv_folds?: number | null
   hyperparameters?: Record<string, number>
+  feature_columns?: string[] | null
 }
 
 export interface TrainProgressEvent {

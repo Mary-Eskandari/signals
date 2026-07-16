@@ -8,6 +8,7 @@ import type {
   TrainProgressEvent,
 } from '../lib/types'
 import { ClassificationResults } from './ClassificationResults'
+import { FeatureSelector } from './FeatureSelector'
 import { HyperparameterControls } from './HyperparameterControls'
 import { TrainingProgress } from './TrainingProgress'
 
@@ -21,6 +22,8 @@ export function ClassificationView() {
   const [modelsData, setModelsData] = useState<ClassificationModelsResponse | null>(null)
   const [status, setStatus] = useState<ClassificationStatus | null>(null)
   const [records, setRecords] = useState<string[]>([])
+  const [allFeatures, setAllFeatures] = useState<string[]>([])
+  const [selectedFeatures, setSelectedFeatures] = useState<string[]>([])
 
   const [selectedModel, setSelectedModel] = useState('random_forest')
   const [hyperparams, setHyperparams] = useState<Record<string, number>>({})
@@ -39,6 +42,10 @@ export function ClassificationView() {
   useEffect(() => {
     api.classificationModels().then(setModelsData)
     api.classificationRecords().then(setRecords)
+    api.classificationFeatures().then((features) => {
+      setAllFeatures(features)
+      setSelectedFeatures(features) // default to using every engineered feature
+    })
     const poll = () => api.classificationStatus().then(setStatus)
     poll()
     const interval = setInterval(poll, 15000) // dataset build may still be running server-side
@@ -64,6 +71,10 @@ export function ClassificationView() {
     return grouped
   }, [modelsData])
 
+  // Raw-waveform models (cnn/lstm) always use the fixed raw signal channels —
+  // feature selection only applies to engineered-feature models.
+  const usesEngineeredFeatures = modelsData?.models[selectedModel]?.feature_set === 'engineered'
+
   const train = () => {
     setTraining(true)
     setError(null)
@@ -80,6 +91,7 @@ export function ClassificationView() {
               : { mode: 'auto', test_size: testSize },
           cv_folds: useCV ? cvFolds : null,
           hyperparameters: hyperparams,
+          feature_columns: usesEngineeredFeatures ? selectedFeatures : null,
         },
         (event) => {
           if (event.type === 'result' && event.data) {
@@ -95,7 +107,10 @@ export function ClassificationView() {
       .finally(() => setTraining(false))
   }
 
-  const canTrain = !training && (splitMode === 'auto' || (manualTrainIds.length > 0 && manualTestIds.length > 0))
+  const canTrain =
+    !training &&
+    (splitMode === 'auto' || (manualTrainIds.length > 0 && manualTestIds.length > 0)) &&
+    (!usesEngineeredFeatures || selectedFeatures.length > 0)
 
   return (
     <div>
@@ -199,6 +214,20 @@ export function ClassificationView() {
                 ))}
               </select>
             </label>
+          </div>
+        )}
+
+        {usesEngineeredFeatures ? (
+          <>
+            <h4 style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.4, color: 'var(--text-muted)', marginTop: 16 }}>
+              Features
+            </h4>
+            <FeatureSelector allFeatures={allFeatures} selected={selectedFeatures} onChange={setSelectedFeatures} />
+          </>
+        ) : (
+          <div className="legend-note" style={{ marginTop: 16 }}>
+            This model trains on raw PA-pressure/ECG/SCG waveform snippets, not the engineered features below — feature
+            selection doesn't apply here.
           </div>
         )}
 

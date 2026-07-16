@@ -1,4 +1,5 @@
 import { ConfusionMatrixChart } from './ConfusionMatrixChart'
+import { BEAT_FIELDS } from '../lib/glossary'
 import type { ClassificationResult } from '../lib/types'
 
 interface Props {
@@ -10,6 +11,12 @@ export function ClassificationResults({ result }: Props) {
 
   return (
     <div>
+      {result.feature_set === 'engineered' && result.feature_columns && (
+        <div className="legend-note" style={{ marginBottom: 12 }}>
+          Trained on {result.feature_columns.length} feature{result.feature_columns.length === 1 ? '' : 's'}:{' '}
+          {result.feature_columns.map((f) => BEAT_FIELDS[f]?.label ?? f).join(', ')}
+        </div>
+      )}
       <div className="stat-grid">
         {isCV ? (
           <>

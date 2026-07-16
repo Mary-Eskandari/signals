@@ -261,8 +261,19 @@ def group_train_test_split(
     return df.index.to_numpy()[train_idx], df.index.to_numpy()[test_idx]
 
 
-def _prepare_engineered(df: pd.DataFrame, idx: np.ndarray) -> np.ndarray:
-    return df.loc[idx, NUMERIC_FEATURE_COLUMNS].fillna(0.0).to_numpy(dtype=np.float32)
+def resolve_feature_columns(feature_columns: list[str] | None) -> list[str]:
+    """Validates a user-chosen feature subset against the known engineered columns;
+    None/empty falls back to the full default set."""
+    if not feature_columns:
+        return list(NUMERIC_FEATURE_COLUMNS)
+    unknown = set(feature_columns) - set(NUMERIC_FEATURE_COLUMNS)
+    if unknown:
+        raise ValueError(f"unknown feature column(s): {sorted(unknown)}")
+    return list(feature_columns)
+
+
+def _prepare_engineered(df: pd.DataFrame, idx: np.ndarray, feature_columns: list[str]) -> np.ndarray:
+    return df.loc[idx, feature_columns].fillna(0.0).to_numpy(dtype=np.float32)
 
 
 def _normalize_raw(X: np.ndarray, mean: np.ndarray | None = None, std: np.ndarray | None = None):
@@ -354,6 +365,7 @@ def _fit_predict(
     test_idx: np.ndarray,
     hyperparams: dict | None = None,
     on_progress=None,
+    feature_columns: list[str] | None = None,
 ):
     feature_set = MODEL_REGISTRY[model_name]["feature_set"]
     y_train = df.loc[train_idx, "label"].to_numpy()
@@ -369,8 +381,9 @@ def _fit_predict(
     else:
         if on_progress is not None:
             on_progress({"type": "fitting", "model": model_name})
-        X_train = _prepare_engineered(df, train_idx)
-        X_test = _prepare_engineered(df, test_idx)
+        resolved_columns = resolve_feature_columns(feature_columns)
+        X_train = _prepare_engineered(df, train_idx, resolved_columns)
+        X_test = _prepare_engineered(df, test_idx, resolved_columns)
         model = _make_classic_model(model_name, hyperparams)
         model.fit(X_train, y_train)
         y_pred = model.predict(X_test)
@@ -386,14 +399,21 @@ def train_and_evaluate(
     cv_folds: int | None = None,
     hyperparameters: dict | None = None,
     on_progress=None,
+    feature_columns: list[str] | None = None,
 ) -> dict:
     """`on_progress`, if given, is called with dicts describing training progress:
     {"type": "epoch", ...} per CNN epoch, {"type": "fold", ...} per completed CV
     fold, {"type": "fitting", ...} once for classic models (which train too fast
     for meaningful sub-progress). Callers (e.g. the streaming API endpoint) use
-    this to surface tqdm-like live progress instead of a plain spinner."""
+    this to surface tqdm-like live progress instead of a plain spinner.
+
+    `feature_columns`, if given, restricts engineered-feature models (classic/
+    ensemble/mlp) to that subset of NUMERIC_FEATURE_COLUMNS — lets a user compare
+    which features actually drive accuracy. Ignored for raw-waveform models
+    (cnn/lstm), which always use the fixed raw channels."""
     if model_name not in MODEL_REGISTRY:
         raise ValueError(f"model must be one of {list(MODEL_REGISTRY)}, got {model_name!r}")
+    resolved_feature_columns = resolve_feature_columns(feature_columns)
 
     df, snippets = load_dataset()
     start = time.time()
@@ -405,7 +425,8 @@ def train_and_evaluate(
         for fold_i, (train_idx, test_idx) in enumerate(gkf.split(df, groups=df["record_id"]), 1):
             train_idx, test_idx = df.index.to_numpy()[train_idx], df.index.to_numpy()[test_idx]
             y_test, y_pred = _fit_predict(
-                model_name, df, snippets, train_idx, test_idx, resolved_hyperparams, on_progress
+                model_name, df, snippets, train_idx, test_idx, resolved_hyperparams, on_progress,
+                feature_columns=resolved_feature_columns,
             )
             fold_metrics = _evaluate(y_test, y_pred)
             fold_results.append(fold_metrics)
@@ -424,6 +445,7 @@ def train_and_evaluate(
         return {
             "model": model_name,
             "feature_set": MODEL_REGISTRY[model_name]["feature_set"],
+            "feature_columns": resolved_feature_columns,
             "hyperparameters": resolved_hyperparams,
             "cv_folds": cv_folds,
             "cv_results": fold_results,
@@ -435,12 +457,16 @@ def train_and_evaluate(
         }
 
     train_idx, test_idx = group_train_test_split(df, test_size, manual_train_ids, manual_test_ids)
-    y_test, y_pred = _fit_predict(model_name, df, snippets, train_idx, test_idx, resolved_hyperparams, on_progress)
+    y_test, y_pred = _fit_predict(
+        model_name, df, snippets, train_idx, test_idx, resolved_hyperparams, on_progress,
+        feature_columns=resolved_feature_columns,
+    )
     result = _evaluate(y_test, y_pred)
     result.update(
         {
             "model": model_name,
             "feature_set": MODEL_REGISTRY[model_name]["feature_set"],
+            "feature_columns": resolved_feature_columns,
             "hyperparameters": resolved_hyperparams,
             "n_train_beats": len(train_idx),
             "n_test_beats": len(test_idx),
